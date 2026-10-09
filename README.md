@@ -58,10 +58,13 @@ AIエージェント信頼面スキャン — 2026-10-09
 ## Usage
 
 ```bash
-skilltrust scan                # human-readable one-screen report (Japanese)
-skilltrust scan --json         # machine-readable, for diffing between runs
-skilltrust scan --output FILE  # write the report to a file (monthly diff workflow)
+skilltrust scan                    # human-readable one-screen report (locale-aware)
+skilltrust scan --lang en|ja|auto  # force the display language (default: auto from locale)
+skilltrust scan --json             # machine-readable, for diffing between runs
+skilltrust scan --output FILE      # write the report to a file (monthly diff workflow)
 ```
+
+The human-readable report follows your locale (`LC_ALL` / `LC_MESSAGES` / `LANG`) and defaults to English when none is set; `--lang` overrides it. The `--json` output stays language-neutral on purpose — the `suggested_action` is always the canonical English string, so a monthly diff is stable no matter where it runs.
 
 Run it monthly, keep the `--json` outputs, and diff them: "what changed since last month" — new skills, new script-bundled skills, trust-list growth — is the entire recurring practice. Findings are reported with exit code 0; only an environment catastrophe (e.g. `HOME` unset) exits 1.
 

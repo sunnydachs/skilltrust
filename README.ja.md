@@ -58,10 +58,13 @@ AIエージェント信頼面スキャン — 2026-10-09
 ## 使い方
 
 ```bash
-skilltrust scan                # 1画面の読み取りやすいレポート(日本語)
-skilltrust scan --json         # 機械可読。実行間のdiff用
-skilltrust scan --output FILE  # レポートをファイルに書き出す(月次diff運用)
+skilltrust scan                    # 1画面のレポート(ロケール自動)
+skilltrust scan --lang en|ja|auto  # 表示言語を指定(既定はロケールから自動)
+skilltrust scan --json             # 機械可読。実行間のdiff用
+skilltrust scan --output FILE      # レポートをファイルに書き出す(月次diff運用)
 ```
+
+人間向けレポートはロケール(`LC_ALL` / `LC_MESSAGES` / `LANG`)に従い、未設定なら英語です。`--lang` で上書きできます。`--json` は意図的に言語非依存 — `suggested_action` は常に正規の英語文字列なので、どこで実行しても月次diffが安定します。
 
 月1回実行して`--json`の出力を保存し、diffしてください。「先月から何が変わったか」— 増えたスキル、新しくスクリプト同梱になったスキル、trustリストの増減 — それが継続運用のすべてです。指摘があってもexit codeは0です。exit 1は環境破壊(HOME未設定など)のみです。
 
