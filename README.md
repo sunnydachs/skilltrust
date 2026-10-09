@@ -35,23 +35,23 @@ skilltrust scan
 Example output (illustrative — counts depend on the machine it runs on):
 
 ```
-AIエージェント信頼面スキャン — 2026-10-09
+AI-agent trust-surface scan — 2026-10-09
 
-[スキル在庫]
-  Claude Code : 12 skills (スクリプト同梱 2)
-  共用 .agents : 12 skills (スクリプト同梱 2)
-  Hermes      : 84 skills (スクリプト同梱 9)
-  プロジェクト直下: 0 件 (なし)
+[Skill inventory]
+  Claude Code : 12 skills (2 script-bundled)
+  Shared .agents: 10 skills (2 script-bundled)
+  Hermes      : 84 skills (9 script-bundled)
+  Project-local: 0 (none)
 
-[信頼設定]
-  Hermes trust済みrepo: 1 件 (/home/you/projects/example)
-  隔離(quarantine): 0 件
-  Claude hooks: なし
+[Trust settings]
+  Hermes trusted repos: 1 (/home/you/projects/example)
+  Quarantined: 0
+  Claude hooks: no
 
-[トークン]
-  gh: 'delete_repo', 'gist', 'read:org', 'workflow'  ← workflow, delete_repo が広すぎ
+[Tokens]
+  gh: 'delete_repo', 'gist', 'read:org', 'workflow'  ← workflow, delete_repo overbroad
 
-[今日やる1つ]
+[Do this one thing]
   → narrow the gh token scope (5 min)
 ```
 
