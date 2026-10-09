@@ -6,14 +6,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  issues: write
+  issues: write   # create/remove the stale label, close stale items
   pull-requests: write
 
 jobs:
   stale:
+    name: stale
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v11
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11
         with:
           days-before-stale: 30
           days-before-close: 7

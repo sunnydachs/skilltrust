@@ -6,18 +6,19 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: write      # merge the Dependabot PR
+  pull-requests: write # set auto-merge on it
 
 jobs:
   dependabot:
+    name: dependabot-auto-merge
     runs-on: ubuntu-latest
     # Only fire for Dependabot's own PRs. Other PRs go through normal review.
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: Fetch metadata
         id: meta
-        uses: dependabot/fetch-metadata@v3
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
