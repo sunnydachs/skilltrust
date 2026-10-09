@@ -32,7 +32,7 @@ pip install -e .
 skilltrust scan
 ```
 
-Example output (real machine):
+Example output (illustrative — counts depend on the machine it runs on):
 
 ```
 AIエージェント信頼面スキャン — 2026-10-09
@@ -88,7 +88,7 @@ Run it monthly, keep the `--json` outputs, and diff them: "what changed since la
 
 ## Origin
 
-Built as Phase 1 of the a personal problem-discovery pipeline pipeline (mining real user pain from public sources, validating demand, shipping the smallest useful artifact). Demand validation for this theme: HIGH=5 / MEDIUM=14 across Hacker News and GitHub, verdict GO — see the the problem-discovery pipeline weekly reports. The pivot from an earlier "personal leak-checklist" theme followed the pipeline's own finding that free static content in that space is saturated, while the re-formed artifact class (an audit of the user's own machine) is not copyable by static content.
+Built as the first artifact of a personal problem-discovery pipeline (mine real user pain from public sources, validate demand, ship the smallest useful artifact). Demand for this theme was validated as GO across Hacker News and GitHub before any code was written. The pivot away from an earlier "personal leak-checklist" theme followed the pipeline's own finding that free static content in that space is saturated, while this artifact class (an audit of the user's own machine) is not copyable by static content.
 
 ## License
 
