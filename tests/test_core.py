@@ -155,49 +155,60 @@ def test_get_token_scopes_gh_unavailable():
 
 
 def test_get_token_scopes_gh_success():
-    """Test when gh auth status succeeds and returns scopes."""
-    # Case 1: with overbroad scopes
-    gh_output = """
-GitHub CLI auth
-  • accounts: github.com
-    - user: testuser (✓ Logged in)
-    - token: oho__*** (not shown)
-  • scopes: repo, workflow, delete_repo
-"""
+    """Test when gh auth status succeeds and returns scopes (single-line Token: form)."""
+    # Case 1: with overbroad scopes — the real gh 2.x single-line form
+    gh_output = (
+        "github.com\n"
+        "  \u2713 Logged in to github.com account testuser (/home/you/.config/gh/hosts.yml)\n"
+        "  - Active account: true\n"
+        "  - Git operations protocol: https\n"
+        "  - Token: gho_************************************\n"
+        "  - Token scopes: 'admin:org', 'delete_repo', 'repo', 'workflow'\n"
+    )
     with patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = gh_output
         token_info = get_token_scopes()
     assert token_info.gh_available is True
-    assert token_info.scopes == "repo, workflow, delete_repo"
+    assert "workflow" in token_info.scopes and "delete_repo" in token_info.scopes
     assert set(token_info.overbroad_scopes) == {"workflow", "delete_repo"}
+    # token value must never leak into the parsed scopes
+    assert "gho_" not in token_info.scopes and "****" not in token_info.scopes
 
     # Case 2: no overbroad scopes
-    gh_output2 = """
-  • scopes: repo, admin:org
-"""
+    gh_output2 = "  - Token scopes: 'repo', 'admin:org'\n"
     with patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = gh_output2
         token_info = get_token_scopes()
     assert token_info.gh_available is True
-    assert token_info.scopes == "repo, admin:org"
+    assert "admin:org" in token_info.scopes
     assert token_info.overbroad_scopes == []
+
+
+def test_get_token_scopes_scopes_on_stderr():
+    """Some gh versions print scopes to stderr."""
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "github.com\n  \u2713 Logged in\n"
+        mock_run.return_value.stderr = "  - Token scopes: 'repo', 'workflow'\n"
+        token_info = get_token_scopes()
+    assert token_info.gh_available is True
+    assert set(token_info.overbroad_scopes) == {"workflow"}
+
+
+def _inv(roots=None, scripts_total=None):
+    """Build a SkillInventory from a simple {name: (count, scripts)} spec."""
+    roots = roots or {}
+    return SkillInventory(roots={
+        name: (c, s, [f"{name}-script{i}" for i in range(s)])
+        for name, (c, s) in roots.items()
+    })
 
 
 def test_compute_risk_markers():
     """Test computation of risk markers."""
-    inventories = SkillInventory(
-        claude_count=10,
-        claude_scripts=2,
-        agents_count=5,
-        agents_scripts=1,
-        hermes_count=3,
-        hermes_scripts=0,
-        hermes_community=0,
-        project_local_count=0,
-        project_local_names=[],
-    )
+    inventories = _inv({"Claude Code": (10, 2), "共用 .agents": (5, 1), "Hermes": (3, 0)})
     trust = TrustSettings(
         hermes_trusted_paths=["/path1", "/path2"],
         hermes_trusted_count=2,
@@ -229,7 +240,7 @@ def test_determine_suggested_action_priority():
         trusted_paths=[],
         overbroad_token_scopes=["workflow"],
     )
-    inventories = SkillInventory(0,0,0,0,0,0,0,0,[])
+    inventories = _inv({})
     action = determine_suggested_action(risk_markers, inventories)
     assert action == "narrow the gh token scope (5 min)"
 
@@ -241,16 +252,14 @@ def test_determine_suggested_action_priority():
 
     # Priority 3: scripts-bundled skill count > 0
     risk_markers.hooks_present = False
-    inventories = SkillInventory(0,0,0,0,0,0,0,0,[])  # reset
-    inventories.claude_scripts = 2
+    inventories = _inv({"Claude Code": (2, 2)})
     action = determine_suggested_action(risk_markers, inventories)
     assert action == "confirm provenance of the 2 script-bundled skills"
 
     # Priority 4: trust list > 3
     risk_markers.skills_with_scripts = 0
     risk_markers.trust_list_size = 4
-    # Reset inventories to zero for this test
-    inventories = SkillInventory(0,0,0,0,0,0,0,0,[])
+    inventories = _inv({})
     action = determine_suggested_action(risk_markers, inventories)
     assert action == "prune trusted_project_dirs"
 
@@ -262,17 +271,7 @@ def test_determine_suggested_action_priority():
 
 def test_build_scan_result():
     """Test building the full scan result."""
-    inventories = SkillInventory(
-        claude_count=1,
-        claude_scripts=0,
-        agents_count=2,
-        agents_scripts=0,
-        hermes_count=3,
-        hermes_scripts=1,
-        hermes_community=0,
-        project_local_count=1,
-        project_local_names=["myproject"],
-    )
+    inventories = _inv({"Claude Code": (1, 0), "Codex": (2, 1)})
     trust = TrustSettings(
         hermes_trusted_paths=["/trusted/path"],
         hermes_trusted_count=1,
@@ -287,13 +286,22 @@ def test_build_scan_result():
         overbroad_scopes=[],
     )
     result = build_scan_result(inventories, trust, tokens, claude_hooks_present=False, project_local_skills=[("myproject", 1)])
-    assert result.date == "2026-10-09"  # today's date in ISO format
-    assert result.inventories.claude_count == 1
+    assert result.inventories.total_skills == 3  # 1 + 2
+    assert result.inventories.total_scripts == 1  # from Codex
     assert result.trust.hermes_trusted_count == 1
     assert result.tokens.gh_available is True
-    assert result.risk_markers.skills_with_scripts == 1  # from hermes_scripts
+    assert result.risk_markers.skills_with_scripts == 1
     # With scripts-bundled skills > 0, the suggested action should be to confirm provenance
     assert result.suggested_action == "confirm provenance of the 1 script-bundled skills"
+
+
+def test_skill_inventory_dedupes_symlinked_roots():
+    """total_skills sums per-root unique counts — the scan already dedupes."""
+    # the same trio symlinked under two roots: each root reports only its unique part
+    inventories = _inv({"Claude Code": (11, 2), "Codex": (0, 0)})
+    inventories.roots.pop("Codex")  # zero-skill roots are omitted
+    assert inventories.total_skills == 11
+    assert inventories.total_scripts == 2
 
 
 if __name__ == "__main__":

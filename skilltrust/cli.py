@@ -18,25 +18,28 @@ from skilltrust.core import (
 
 
 def format_human_output(result) -> str:
-    """Format the scan result as human-readable text (Japanese-first)."""
+    """Format the scan result as human-readable text (Japanese-first).
+
+    One row per agent root that EXISTS and holds at least one skill; roots
+    without skills are omitted (absence is not an error).
+    """
     lines = []
-    
+
     # Header with date
     lines.append(f"AIエージェント信頼面スキャン — {result.date}")
     lines.append("")
-    
+
     # [スキル在庫]
     lines.append("[スキル在庫]")
-    lines.append(f"  Claude Code : {result.inventories.claude_count} skills (スクリプト同梱 {result.inventories.claude_scripts})")
-    lines.append(f"  共用 .agents : {result.inventories.agents_count} skills (スクリプト同梱 {result.inventories.agents_scripts})")
-    lines.append(f"  Hermes      : {result.inventories.hermes_count} skills (スクリプト同梱 {result.inventories.hermes_scripts})")
+    for name, (count, scripts, _names) in result.inventories.roots.items():
+        lines.append(f"  {name:<12}: {count} skills (スクリプト同梱 {scripts})")
     if result.inventories.project_local_names:
         proj_list = "(" + ", ".join(result.inventories.project_local_names) + ")"
     else:
         proj_list = "(なし)"
     lines.append(f"  プロジェクト直下: {result.inventories.project_local_count} 件 {proj_list}")
     lines.append("")
-    
+
     # [信頼設定]
     lines.append("[信頼設定]")
     if result.trust.hermes_trusted_paths:
@@ -48,7 +51,7 @@ def format_human_output(result) -> str:
     hooks_text = "あり" if result.trust.claude_hooks_present else "なし"
     lines.append(f"  Claude hooks: {hooks_text}")
     lines.append("")
-    
+
     # [トークン]
     lines.append("[トークン]")
     if result.tokens.gh_available:
@@ -57,21 +60,21 @@ def format_human_output(result) -> str:
             overbroad_with_reason = []
             for scope in result.tokens.overbroad_scopes:
                 if scope == "workflow":
-                    overbroad_with_reason.append(f"workflow (can exfil all repo secrets via CI)")
+                    overbroad_with_reason.append("workflow (can exfil all repo secrets via CI)")
                 elif scope == "delete_repo":
-                    overbroad_with_reason.append(f"delete_repo (irreversible)")
+                    overbroad_with_reason.append("delete_repo (irreversible)")
                 else:
                     overbroad_with_reason.append(scope)
-            scopes_display += "  ← " + ", ".join(overbroad_with_reason) + " 理由付きで指摘"
+            scopes_display += "  ← " + ", ".join(overbroad_with_reason) + " が広すぎ"
     else:
         scopes_display = "unavailable"
     lines.append(f"  gh: {scopes_display}")
     lines.append("")
-    
+
     # [今日やる1つ]
     lines.append("[今日やる1つ]")
     lines.append(f"  → {result.suggested_action}")
-    
+
     return "\n".join(lines)
 
 
@@ -80,7 +83,7 @@ def main() -> int:
         description="Audit a developer machine's AI-agent trust surface"
     )
     subparsers = parser.add_subparsers(dest="command")
-    
+
     scan_parser = subparsers.add_parser("scan", help="Run the trust surface scan")
     scan_parser.add_argument(
         "--json",
@@ -92,39 +95,40 @@ def main() -> int:
         type=Path,
         help="Write report to FILE instead of stdout"
     )
-    
+
     args = parser.parse_args()
-    
+
     if args.command != "scan":
-        # If no command is given, default to scan (for backward compatibility?)
-        # But spec says one subcommand: scan, so we should require it.
         parser.print_help()
         return 1
-    
+
     try:
         # Gather data
         inventories = get_real_skill_inventory()
         trust_settings, claude_hooks, project_local_skills = get_real_trust_settings()
         token_info = get_real_token_info()
-        
+
+        inventories.project_local_count = sum(n for _p, n in project_local_skills)
+        inventories.project_local_names = [p for p, _n in project_local_skills]
+        trust_settings.project_local_skills = project_local_skills
+
         # Build result
         result = build_scan_result(
             inventories, trust_settings, token_info, claude_hooks, project_local_skills
         )
-        
+
         # Format output
         if args.json:
             # Convert to dict for JSON serialization
             output_data = {
                 "date": result.date,
                 "inventories": {
-                    "claude_count": result.inventories.claude_count,
-                    "claude_scripts": result.inventories.claude_scripts,
-                    "agents_count": result.inventories.agents_count,
-                    "agents_scripts": result.inventories.agents_scripts,
-                    "hermes_count": result.inventories.hermes_count,
-                    "hermes_scripts": result.inventories.hermes_scripts,
-                    "hermes_community": result.inventories.hermes_community,
+                    "roots": {
+                        name: {"count": c, "script_bundled": s, "script_names": n}
+                        for name, (c, s, n) in result.inventories.roots.items()
+                    },
+                    "total_skills": result.inventories.total_skills,
+                    "total_script_bundled": result.inventories.total_scripts,
                     "project_local_count": result.inventories.project_local_count,
                     "project_local_names": result.inventories.project_local_names,
                 },
@@ -153,15 +157,15 @@ def main() -> int:
             output_text = json.dumps(output_data, indent=2, ensure_ascii=False)
         else:
             output_text = format_human_output(result)
-        
+
         # Write output
         if args.output:
             args.output.write_text(output_text + "\n", encoding="utf-8")
         else:
             print(output_text)
-            
+
         return 0
-        
+
     except Exception as e:
         # IO catastrophe - exit code 1
         print(f"Error: {e}", file=sys.stderr)

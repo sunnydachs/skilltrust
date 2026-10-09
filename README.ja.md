@@ -17,7 +17,7 @@
 
 `skilltrust`はその棚卸しを1コマンドにしたものです。動作するマシンについて次を答えます:
 
-- インストール済みのエージェントスキル(Claude Code、共用`.agents`、Hermes)と、実行スクリプトを同梱しているもの — 脆弱性発生率が実測で2.12倍高いマーカー
+- 有名エージェント(Claude Code、Codex、OpenClaw、Cursor、OpenCode、共用`.agents`規約、Hermes)にインストール済みのエージェントスキルと、実行スクリプトを同梱しているもの — 脆弱性発生率が実測で2.12倍高いマーカー
 - プロジェクトローカルスキルの読み込みを許した(trust済み)ディレクトリと、隔離されたスキル数
 - Claude Codeのhooks(セッション開始時のコード実行)が設定されているか
 - GitHubトークンのスコープ。`workflow`と`delete_repo`は広すぎとして指摘(workflowスコープのトークンはCIを書き換えて全repoのsecretsを読める)
@@ -69,7 +69,7 @@ skilltrust scan --output FILE  # レポートをファイルに書き出す(月�
 
 | 対象 | ソース | 備考 |
 |---|---|---|
-| スキル在庫 | `~/.claude/skills`、`~/.agents/skills`、`~/.hermes/skills` | Hermesのカテゴリ階層対応。symlinkルートは実パスで重複排除 |
+| スキル在庫 | `~/.claude/skills`、`~/.codex/skills`、`~/.openclaw/skills`、`~/.cursor/skills`、`~/.opencode/skills`、`~/.agents/skills`、`~/.hermes/skills` | 有名エージェントの個人ルート。ないルートは省略、symlinkルートは実パスで重複排除、Hermesのカテゴリ階層対応 |
 | スクリプト同梱 | スキルdir配下の`*.py/sh/js/ts` | `__pycache__`は除外 |
 | プロジェクトローカル | `~/projects/*/.hermes/skills`、`~/projects/*/.agents/skills` | trust済みrepoでのみロードされる。件数とプロジェクト名 |
 | Hermes trustリスト | `~/.hermes/config.yaml` → `skills.trusted_project_dirs` | 最小限のstdlib yamlサブセットパーサ。パース失敗は報告され、クラッシュしない |

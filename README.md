@@ -17,7 +17,7 @@ The common advice — "read every skill before you use it" — does not scale an
 
 `skilltrust` is the one-command version of that inventory. It answers, for the machine it runs on:
 
-- What agent skills are installed (Claude Code, shared `.agents`, Hermes), and which ones bundle executable scripts — the marker with a measured 2.12x higher vulnerability rate
+- What agent skills are installed across the well-known agents (Claude Code, Codex, OpenClaw, Cursor, OpenCode, the shared `.agents` convention, Hermes), and which ones bundle executable scripts — the marker with a measured 2.12x higher vulnerability rate
 - Which project directories are trusted to load project-local skills, and how many are quarantined
 - Whether Claude Code hooks (pre-session code execution) are configured
 - What scopes your GitHub token carries, flagging `workflow` and `delete_repo` as overbroad (a `workflow`-scoped token can rewrite CI to read every repo secret)
@@ -69,7 +69,7 @@ Run it monthly, keep the `--json` outputs, and diff them: "what changed since la
 
 | Surface | Source | Notes |
 |---|---|---|
-| Skill inventory | `~/.claude/skills`, `~/.agents/skills`, `~/.hermes/skills` | Hermes category-subdir layout supported; symlinked roots deduplicated by real path |
+| Skill inventory | `~/.claude/skills`, `~/.codex/skills`, `~/.openclaw/skills`, `~/.cursor/skills`, `~/.opencode/skills`, `~/.agents/skills`, `~/.hermes/skills` | Known agents' personal roots; missing roots are omitted, symlinked roots deduplicated by real path, Hermes category-subdir layout supported |
 | Script-bundled skills | `*.py/sh/js/ts` under each skill dir | `__pycache__` excluded |
 | Project-local skills | `~/projects/*/.hermes/skills`, `~/projects/*/.agents/skills` | These load only in trusted repos — count and project list |
 | Hermes trust list | `~/.hermes/config.yaml` → `skills.trusted_project_dirs` | Minimal stdlib yaml-subset parser; a parse problem is reported, never crashes |
