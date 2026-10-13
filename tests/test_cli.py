@@ -213,7 +213,9 @@ def test_main_output_to_file_ja(tmp_path):
 
         assert output_file.exists()
         content = output_file.read_text(encoding="utf-8")
-        assert "AIエージェント信頼面スキャン — 2026-10-09" in content
+        # cli.py stamps date.today() — assert against today, not a baked-in date
+        from datetime import date as _date
+        assert f"AIエージェント信頼面スキャン — {_date.today().isoformat()}" in content
         assert "→ 今サイクルは対応不要" in content
 
 
