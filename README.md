@@ -11,7 +11,7 @@ English | [日本語](README.ja.md)
 
 ## Why it exists
 
-Agent skills (Claude Code `SKILL.md`, OpenClaw, Hermes skills) are prompt-payload packages: a skill's text IS an instruction to your agent, inherited alongside your shell, filesystem, and stored credentials. Research in 2026 quantified the risk — a 42,447-skill study (USENIX Security '26, "Do Not Mention This to the User") found 26.1% carry at least one vulnerability and 5.2% show clearly malicious behavior, and Snyk's ToxicSkills scan found 36% of marketplace skills defective with 76 outright malicious payloads. The ClawHavoc campaign planted 1,200+ malicious skills in a marketplace distributing a credential stealer.
+Agent skills (Claude Code `SKILL.md`, OpenClaw, Hermes skills) are prompt-payload packages: a skill's text IS an instruction to your agent, inherited alongside your shell, filesystem, and stored credentials. Research in 2026 quantified the risk — the study behind NVIDIA's SkillSpector ("Agent Skills in the Wild", Liu et al.) analyzed 31,132 of 42,447 collected skills and found 26.1% carry at least one vulnerability and 5.2% show likely malicious intent; the USENIX Security '26 paper "Do Not Mention This to the User" behaviorally confirmed 157 of 98,380 analyzed skills as malicious. Snyk's ToxicSkills scan found 36.8% of 3,984 marketplace skills defective, 76 of them outright malicious payloads. An audit of the ClawHavoc campaign confirmed 341 malicious skills distributing the Atomic Stealer credential stealer. Primary sources: [SkillSpector research background](https://github.com/nvidia/skillspector) · [USENIX Security '26](https://www.usenix.org/conference/usenixsecurity26/presentation/liu-yi) · [Snyk ToxicSkills](https://research.snyk.io/blog/agent-skills-threat-landscape/) · [ClawHavoc audit](https://thehackernews.com/2026/02/researchers-find-341-malicious-clawhub.html)
 
 The common advice — "read every skill before you use it" — does not scale and, worse, does not work: a skill that reads as safe can still be an attack, because the text you are reviewing is itself the payload. Static scanners have the same blind spot for natural-language intent. The workable defense is not reading, it is **provenance and blast radius**: know what is installed, where it came from, what it is trusted to do, and which of your tokens it could reach.
 
@@ -39,7 +39,7 @@ AI-agent trust-surface scan — 2026-10-09
 
 [Skill inventory]
   Claude Code : 12 skills (2 script-bundled)
-  Shared .agents: 10 skills (2 script-bundled)
+  .agents     : 10 skills (2 script-bundled)
   Hermes      : 84 skills (9 script-bundled)
   Project-local: 0 (none)
 

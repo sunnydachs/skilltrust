@@ -11,13 +11,13 @@
 
 ## なぜ必要か
 
-エージェントスキル(Claude Codeの`SKILL.md`、OpenClaw、Hermes skills)は、プロンプトそのものを配布するパッケージです。スキルの文章はエージェントへの指示文であり、あなたのシェル・ファイルシステム・保存済み認証情報と同じ権限を継承します。2026年の研究はこの危険を定量化しました — 42,447件のスキル分析(USENIX Security '26 "Do Not Mention This to the User")では26.1%に脆弱性、5.2%に明確な悪意ある挙動を確認。SnykのToxicSkillsではマーケットプレイスのスキルの36%に欠陥、76件が悪意あるペイロードでした。ClawHavocキャンペーンは1,200本超の悪意スキルをマーケットプレイスに植え付け、credential stealerを配布しました。
+エージェントスキル(Claude Codeの`SKILL.md`、OpenClaw、Hermes skills)は、プロンプトそのものを配布するパッケージです。スキルの文章はエージェントへの指示文であり、あなたのシェル・ファイルシステム・保存済み認証情報と同じ権限を継承します。2026年の研究はこの危険を定量化しました — NVIDIA SkillSpectorの基盤研究(Liu et al.「Agent Skills in the Wild」)は42,447件を収集して31,132件を分析し、26.1%に脆弱性、5.2%に悪意らしい高深刻度パターンを確認。USENIX Security '26の論文「Do Not Mention This to the User」は98,380件中157件を「明確に悪意あり」と確認しました。SnykのToxicSkillsでは3,984件中36.8%に欠陥、うち76件が悪意あるペイロード。ClawHavocキャンペーンの監査では341件の悪意スキルが確認され、認証情報を盗むAtomic Stealerを配布していました。一次情報: [SkillSpector研究背景](https://github.com/nvidia/skillspector) ・ [USENIX Security '26](https://www.usenix.org/conference/usenixsecurity26/presentation/liu-yi) ・ [Snyk ToxicSkills](https://research.snyk.io/blog/agent-skills-threat-landscape/) ・ [ClawHavoc監査](https://thehackernews.com/2026/02/researchers-find-341-malicious-clawhub.html)
 
 よくあるアドバイス「使う前に全部読め」はスケールしないうえ、実は効きません。安全に読めるスキルでも攻撃になりうるからです — レビューしている文章そのものがペイロードだからです。静的スキャナも自然言語の意図に対して同じ弱点を持ちます。実効的な防御は「読むこと」ではなく**来歴と被害半径**です: 何が入っているか、どこから来たか、何を信頼されているか、どのトークンに届きうるかを知ること。
 
 `skilltrust`はその棚卸しを1コマンドにしたものです。動作するマシンについて次を答えます:
 
-- 有名エージェント(Claude Code、Codex、OpenClaw、Cursor、OpenCode、共用`.agents`規約、Hermes)にインストール済みのエージェントスキルと、実行スクリプトを同梱しているもの — 脆弱性発生率が実測で2.12倍高いマーカー
+- 有名エージェント(Claude Code、Codex、OpenClaw、Cursor、OpenCode、`.agents`規約、Hermes)にインストール済みのエージェントスキルと、実行スクリプトを同梱しているもの — 脆弱性発生率が実測で2.12倍高いマーカー
 - プロジェクトローカルスキルの読み込みを許した(trust済み)ディレクトリと、隔離されたスキル数
 - Claude Codeのhooks(セッション開始時のコード実行)が設定されているか
 - GitHubトークンのスコープ。`workflow`と`delete_repo`は広すぎとして指摘(workflowスコープのトークンはCIを書き換えて全repoのsecretsを読める)
@@ -39,7 +39,7 @@ AIエージェント信頼面スキャン — 2026-10-09
 
 [スキル在庫]
   Claude Code : 12 skills (スクリプト同梱 2)
-  共用 .agents : 12 skills (スクリプト同梱 2)
+  .agents     : 12 skills (スクリプト同梱 2)
   Hermes      : 84 skills (スクリプト同梱 9)
   プロジェクト直下: 0 件 (なし)
 
