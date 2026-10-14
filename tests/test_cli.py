@@ -65,7 +65,7 @@ def test_format_human_output_ja():
     assert "Hermes" in output and "10 skills (スクリプト同梱 1)" in output
     assert "プロジェクト直下: 1 件 (myproject)" in output
     assert "[信頼設定]" in output
-    assert "Hermes trust済みrepo: 2 件 (/path/to/project1, /path/to/project2)" in output
+    assert "Trust済みプロジェクト: 2 件 (/path/to/project1, /path/to/project2)" in output
     assert "隔離(quarantine): 3 件" in output
     assert "Claude hooks: あり" in output
     assert "[トークン]" in output
@@ -83,7 +83,7 @@ def test_format_human_output_en():
     assert "5 skills (2 script-bundled)" in output
     assert "Project-local: 1 (myproject)" in output
     assert "[Trust settings]" in output
-    assert "Hermes trusted repos: 2 (/path/to/project1, /path/to/project2)" in output
+    assert "Trusted project dirs: 2 (/path/to/project1, /path/to/project2)" in output
     assert "Quarantined: 3" in output
     assert "Claude hooks: yes" in output
     assert "[Tokens]" in output
@@ -111,7 +111,7 @@ def test_format_human_output_defaults_ja():
     # no roots = no inventory rows
     assert "Claude Code" not in output
     assert "プロジェクト直下: 0 件 (なし)" in output
-    assert "Hermes trust済みrepo: 0 件 (なし)" in output
+    assert "Trust済みプロジェクト: 0 件 (なし)" in output
     assert "隔離(quarantine): 0 件" in output
     assert "Claude hooks: なし" in output
     assert "gh: unavailable" in output
@@ -134,7 +134,7 @@ def test_format_human_output_defaults_en():
     )
     output = format_human_output(result, lang="en")
     assert "Project-local: 0 (none)" in output
-    assert "Hermes trusted repos: 0 (none)" in output
+    assert "Trusted project dirs: 0 (none)" in output
     assert "Claude hooks: no" in output
     assert "→ no action needed this cycle" in output
 

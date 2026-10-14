@@ -44,7 +44,7 @@ AIエージェント信頼面スキャン — 2026-10-09
   プロジェクト直下: 0 件 (なし)
 
 [信頼設定]
-  Hermes trust済みrepo: 1 件 (/home/you/projects/example)
+  Trust済みプロジェクト: 1 件 (/home/you/projects/example)
   隔離(quarantine): 0 件
   Claude hooks: なし
 

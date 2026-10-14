@@ -44,7 +44,7 @@ AI-agent trust-surface scan — 2026-10-09
   Project-local: 0 (none)
 
 [Trust settings]
-  Hermes trusted repos: 1 (/home/you/projects/example)
+  Trusted project dirs: 1 (/home/you/projects/example)
   Quarantined: 0
   Claude hooks: no
 
