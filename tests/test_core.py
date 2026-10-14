@@ -208,7 +208,7 @@ def _inv(roots=None, scripts_total=None):
 
 def test_compute_risk_markers():
     """Test computation of risk markers."""
-    inventories = _inv({"Claude Code": (10, 2), "共用 .agents": (5, 1), "Hermes": (3, 0)})
+    inventories = _inv({"Claude Code": (10, 2), ".agents": (5, 1), "Hermes": (3, 0)})
     trust = TrustSettings(
         hermes_trusted_paths=["/path1", "/path2"],
         hermes_trusted_count=2,

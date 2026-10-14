@@ -33,7 +33,7 @@ KNOWN_SKILL_ROOTS: List[Tuple[str, str]] = [
     (os.path.join(".openclaw", "skills"), "OpenClaw"),
     (os.path.join(".cursor", "skills"), "Cursor"),
     (os.path.join(".opencode", "skills"), "OpenCode"),
-    (os.path.join(".agents", "skills"), "共用 .agents"),
+    (os.path.join(".agents", "skills"), ".agents"),
     (os.path.join(".hermes", "skills"), "Hermes"),
 ]
 

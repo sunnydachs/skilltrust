@@ -30,7 +30,7 @@ MESSAGES = {
         "row": "  {name:<12}: {count} skills ({scripts} script-bundled)",
         "project_local": "  Project-local: {count} {names}",
         "none": "(none)",
-        "root_names": {"共用 .agents": "Shared .agents"},
+        "root_names": {},
         "sec_trust": "[Trust settings]",
         "hermes_trusted": "  Hermes trusted repos: {count} {paths}",
         "quarantine": "  Quarantined: {count}",
