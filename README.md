@@ -75,9 +75,9 @@ Run it monthly, keep the `--json` outputs, and diff them: "what changed since la
 | Skill inventory | `~/.claude/skills`, `~/.codex/skills`, `~/.openclaw/skills`, `~/.cursor/skills`, `~/.opencode/skills`, `~/.agents/skills`, `~/.hermes/skills` | Known agents' personal roots; missing roots are omitted, symlinked roots deduplicated by real path, Hermes category-subdir layout supported |
 | Script-bundled skills | `*.py/sh/js/ts` under each skill dir | `__pycache__` excluded |
 | Project-local skills | `~/projects/*/.hermes/skills`, `~/projects/*/.agents/skills` | These load only in trusted repos — count and project list |
-| Hermes trust list | `~/.hermes/config.yaml` → `skills.trusted_project_dirs` | Minimal stdlib yaml-subset parser; a parse problem is reported, never crashes |
+| Hermes trust list | `~/.hermes/config.yaml` → `skills.trusted_project_dirs` | Minimal stdlib yaml-subset parser; block, key-indent and flow spellings all read; a leg that cannot be read prints "not checked", never a clean negative |
 | Quarantine | `~/.hermes/skills/.hub/quarantine/` | Skills blocked by the hub scanner |
-| Claude Code hooks | `~/.claude/settings.json` → `hooks` key | Hooks run code at session start |
+| Claude Code hooks | `~/.claude/settings.json` → `hooks` key | Hooks run code at session start; an unreadable file prints "not checked" and the clean verdict is refused |
 | GitHub token scopes | `gh auth status` | `workflow` and `delete_repo` flagged as overbroad with reasons |
 
 ## Limitations

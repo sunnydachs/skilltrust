@@ -33,10 +33,13 @@ MESSAGES = {
         "root_names": {},
         "sec_trust": "[Trust settings]",
         "hermes_trusted": "  Trusted project dirs: {count} {paths}",
+        "hermes_unreadable": "  Trusted project dirs: not checked (unreadable config.yaml)",
         "quarantine": "  Quarantined: {count}",
+        "quarantine_unreadable": "  Quarantined: not checked (unreadable quarantine dir)",
         "hooks": "  Claude hooks: {value}",
         "yes": "yes",
         "no": "no",
+        "hooks_unreadable": "not checked (unreadable settings.json)",
         "sec_tokens": "[Tokens]",
         "gh": "  gh: {scopes}",
         "overbroad_suffix": "  ← {items} overbroad",
@@ -52,10 +55,13 @@ MESSAGES = {
         "root_names": {},
         "sec_trust": "[信頼設定]",
         "hermes_trusted": "  Trust済みプロジェクト: {count} 件 {paths}",
+        "hermes_unreadable": "  Trust済みプロジェクト: 確認できず (config.yamlを読み取れず)",
         "quarantine": "  隔離(quarantine): {count} 件",
+        "quarantine_unreadable": "  隔離(quarantine): 確認できず (quarantineディレクトリを読み取れず)",
         "hooks": "  Claude hooks: {value}",
         "yes": "あり",
         "no": "なし",
+        "hooks_unreadable": "確認できず (settings.jsonを読み取れず)",
         "sec_tokens": "[トークン]",
         "gh": "  gh: {scopes}",
         "overbroad_suffix": "  ← {items} が広すぎ",
@@ -70,6 +76,8 @@ _ACTION_JA = {
     "review ~/.claude/settings.json hooks": "~/.claude/settings.json の hooks を確認",
     "prune trusted_project_dirs": "trusted_project_dirs を整理",
     "no action needed this cycle": "今サイクルは対応不要",
+    "resolve the not checked rows before trusting a clean scan":
+        "確認できず(not checked)の行を解決してからクリーン判定を信頼してください",
 }
 _ACTION_JA_SCRIPT_RE = re.compile(r"confirm provenance of the (\d+) script-bundled skills")
 
@@ -139,16 +147,28 @@ def format_human_output(result, lang: str = "en") -> str:
         count=result.inventories.project_local_count, names=proj_names))
     lines.append("")
 
-    # Trust settings
+    # Trust settings — an unreadable leg prints "not checked", never a
+    # clean negative
     lines.append(msg["sec_trust"])
-    if result.trust.hermes_trusted_paths:
-        trusted_list = "(" + ", ".join(result.trust.hermes_trusted_paths) + ")"
+    if result.trust.hermes_config_state == "unreadable":
+        lines.append(msg["hermes_unreadable"])
     else:
-        trusted_list = msg["none"]
-    lines.append(msg["hermes_trusted"].format(
-        count=result.trust.hermes_trusted_count, paths=trusted_list))
-    lines.append(msg["quarantine"].format(count=result.trust.quarantine_count))
-    hooks_value = msg["yes"] if result.trust.claude_hooks_present else msg["no"]
+        if result.trust.hermes_trusted_paths:
+            trusted_list = "(" + ", ".join(result.trust.hermes_trusted_paths) + ")"
+        else:
+            trusted_list = msg["none"]
+        lines.append(msg["hermes_trusted"].format(
+            count=result.trust.hermes_trusted_count, paths=trusted_list))
+    if result.trust.quarantine_state == "unreadable":
+        lines.append(msg["quarantine_unreadable"])
+    else:
+        lines.append(msg["quarantine"].format(count=result.trust.quarantine_count))
+    if result.trust.claude_hooks_state == "unreadable":
+        hooks_value = msg["hooks_unreadable"]
+    elif result.trust.claude_hooks_state == "present":
+        hooks_value = msg["yes"]
+    else:
+        hooks_value = msg["no"]
     lines.append(msg["hooks"].format(value=hooks_value))
     lines.append("")
 
@@ -207,7 +227,7 @@ def main() -> int:
     try:
         # Gather data
         inventories = get_real_skill_inventory()
-        trust_settings, claude_hooks, project_local_skills = get_real_trust_settings()
+        trust_settings, project_local_skills = get_real_trust_settings()
         token_info = get_real_token_info()
 
         inventories.project_local_count = sum(n for _p, n in project_local_skills)
@@ -215,9 +235,7 @@ def main() -> int:
         trust_settings.project_local_skills = project_local_skills
 
         # Build result
-        result = build_scan_result(
-            inventories, trust_settings, token_info, claude_hooks, project_local_skills
-        )
+        result = build_scan_result(inventories, trust_settings, token_info)
 
         # Format output
         if args.json:
@@ -238,9 +256,12 @@ def main() -> int:
                 "trust": {
                     "hermes_trusted_paths": result.trust.hermes_trusted_paths,
                     "hermes_trusted_count": result.trust.hermes_trusted_count,
-                    "hermes_parse_error": result.trust.hermes_parse_error,
+                    "hermes_config_state": result.trust.hermes_config_state,
+                    "hermes_parse_error": result.trust.hermes_config_state == "unreadable",
                     "quarantine_count": result.trust.quarantine_count,
-                    "claude_hooks_present": result.trust.claude_hooks_present,
+                    "quarantine_state": result.trust.quarantine_state,
+                    "claude_hooks_state": result.trust.claude_hooks_state,
+                    "claude_hooks_present": result.trust.claude_hooks_state == "present",
                     "project_local_skills": result.trust.project_local_skills,
                 },
                 "tokens": {
@@ -254,6 +275,7 @@ def main() -> int:
                     "trust_list_size": result.risk_markers.trust_list_size,
                     "trusted_paths": result.risk_markers.trusted_paths,
                     "overbroad_token_scopes": result.risk_markers.overbroad_token_scopes,
+                    "unreadable_legs": result.risk_markers.unreadable_legs,
                 },
                 "suggested_action": result.suggested_action,
             }

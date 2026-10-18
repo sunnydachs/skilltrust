@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 from skilltrust.core import (
     parse_hermes_config,
-    get_hermes_trust_settings,
-    get_claude_hooks_present,
+    get_claude_hooks_state,
+    get_real_trust_settings,
     get_project_local_skills,
     get_token_scopes,
     compute_risk_markers,
@@ -25,16 +25,86 @@ from skilltrust.core import (
 
 
 def test_parse_hermes_config_happy_path():
-    """Test parsing a normal hermes config."""
+    """Test parsing a normal hermes config (documented 4-space block form)."""
     config_content = """skills:
   trusted_project_dirs:
     - /path/to/project1
     - /path/to/project2
 """
     with patch.object(Path, 'read_text', return_value=config_content):
-        trusted_paths, parse_error = parse_hermes_config(Path("/fake/config.yaml"))
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
     assert trusted_paths == ["/path/to/project1", "/path/to/project2"]
-    assert parse_error is False
+    assert state == "present"
+
+
+def test_parse_hermes_config_items_at_key_own_indent():
+    """Items at the key's own indent are valid YAML and must read the same.
+
+    Regression test for the 0.1.0 finding: this spelling read as zero
+    trusted dirs, so the prune action could never fire on a machine whose
+    list was spelled this way.
+    """
+    config_content = """skills:
+  trusted_project_dirs:
+  - /proj/one
+  - /proj/two
+  - /proj/three
+  - /proj/four
+"""
+    with patch.object(Path, 'read_text', return_value=config_content):
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
+    assert trusted_paths == ["/proj/one", "/proj/two", "/proj/three", "/proj/four"]
+    assert state == "present"
+
+
+def test_parse_hermes_config_flow_form():
+    """The flow form is valid YAML and must read the same."""
+    config_content = "skills:\n  trusted_project_dirs: [/proj/one, /proj/two]\n"
+    with patch.object(Path, 'read_text', return_value=config_content):
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
+    assert trusted_paths == ["/proj/one", "/proj/two"]
+    assert state == "present"
+
+
+def test_parse_hermes_config_strips_trailing_comments():
+    """Trailing YAML comments must not end up inside the paths."""
+    config_content = """skills:
+  trusted_project_dirs:
+    - /proj/one          # documented block form
+    - /proj/two
+"""
+    with patch.object(Path, 'read_text', return_value=config_content):
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
+    assert trusted_paths == ["/proj/one", "/proj/two"]
+    assert state == "present"
+
+
+def test_parse_hermes_config_missing_file_is_absent_not_error():
+    """No config file = nothing configured (absent), not an error."""
+    with patch.object(Path, 'read_text', side_effect=FileNotFoundError):
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
+    assert trusted_paths == []
+    assert state == "absent"
+
+
+def test_parse_hermes_config_unreadable_file():
+    """A file that exists but cannot be read must never print as zero."""
+    with patch.object(Path, 'read_text', side_effect=OSError("permission denied")):
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
+    assert trusted_paths == []
+    assert state == "unreadable"
+
+
+def test_parse_hermes_config_non_list_value_is_unreadable():
+    """A value shape we cannot parse is refused, not read as zero."""
+    config_content = """skills:
+  trusted_project_dirs:
+    one: /proj/a
+"""
+    with patch.object(Path, 'read_text', return_value=config_content):
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
+    assert trusted_paths == []
+    assert state == "unreadable"
 
 
 def test_parse_hermes_config_missing_skills_key():
@@ -42,13 +112,18 @@ def test_parse_hermes_config_missing_skills_key():
     config_content = """other_key: value
 """
     with patch.object(Path, 'read_text', return_value=config_content):
-        trusted_paths, parse_error = parse_hermes_config(Path("/fake/config.yaml"))
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
     assert trusted_paths == []
-    assert parse_error is False
+    assert state == "present"
 
 
-def test_parse_hermes_config_malformed_line():
-    """Test parsing when there's a malformed line (should not crash)."""
+def test_parse_hermes_config_malformed_line_refuses():
+    """A non-item line at item depth is not a flat list we can read.
+
+    The 0.1.0 parser silently skipped such lines and kept collecting the
+    rest — an undercount that prints as a clean negative. The tri-state
+    rule: refuse the whole leg instead.
+    """
     config_content = """skills:
   trusted_project_dirs:
     - /path/to/project1
@@ -56,63 +131,70 @@ def test_parse_hermes_config_malformed_line():
     - /path/to/project2
 """
     with patch.object(Path, 'read_text', return_value=config_content):
-        trusted_paths, parse_error = parse_hermes_config(Path("/fake/config.yaml"))
-    # We only pick up lines that start with "    - "
-    assert trusted_paths == ["/path/to/project1", "/path/to/project2"]
-    assert parse_error is False
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
+    assert trusted_paths == []
+    assert state == "unreadable"
 
 
 def test_parse_hermes_config_empty_file():
     """Test parsing an empty file."""
     config_content = ""
     with patch.object(Path, 'read_text', return_value=config_content):
-        trusted_paths, parse_error = parse_hermes_config(Path("/fake/config.yaml"))
+        trusted_paths, state = parse_hermes_config(Path("/fake/config.yaml"))
     assert trusted_paths == []
-    assert parse_error is False
+    assert state == "present"
 
 
-def test_get_hermes_trust_settings(tmp_path):
-    """Trust settings from Hermes config and quarantine."""
-    # Create a temporary config file
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text("""skills:
-  trusted_project_dirs:
-    - / trusted/project
-""")
-    # Create a temporary quarantine directory with two files
-    quarantine_dir = tmp_path / "quarantine"
-    quarantine_dir.mkdir()
-    (quarantine_dir / "file1").touch()
-    (quarantine_dir / "file2").touch()
+def test_get_real_trust_settings_reads_all_legs(tmp_path, monkeypatch):
+    """get_real_trust_settings assembles the real tri-state of every leg.
 
-    trust = get_hermes_trust_settings(
-        hermes_config_path=config_file,
-        hermes_quarantine_path=quarantine_dir,
-    )
-    assert trust.hermes_trusted_paths == ["/ trusted/project"]
+    This is the wiring the 0.1.0 tests never walked: no injected values,
+    a fake HOME with real files.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".hermes").mkdir()
+    (tmp_path / ".hermes" / "config.yaml").write_text(
+        "skills:\n  trusted_project_dirs:\n    - /trusted/project\n")
+    quarantine = tmp_path / ".hermes" / "skills" / ".hub" / "quarantine"
+    quarantine.mkdir(parents=True)
+    (quarantine / "file1").touch()
+    (quarantine / "file2").touch()
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text('{"hooks": {}}')
+
+    trust, project_local = get_real_trust_settings()
+
+    assert trust.hermes_trusted_paths == ["/trusted/project"]
     assert trust.hermes_trusted_count == 1
-    assert trust.hermes_parse_error is False
+    assert trust.hermes_config_state == "present"
     assert trust.quarantine_count == 2
+    assert trust.quarantine_state == "present"
+    assert trust.claude_hooks_state == "present"
+    assert project_local == []
 
 
-def test_get_claude_hooks_present():
-    """Check for hooks in Claude settings."""
+def test_get_claude_hooks_state():
+    """Tri-state read of the Claude settings file."""
     # Case 1: hooks present
     settings_with_hooks = '{"hooks": {"pre-command": []}, "other": "value"}'
     with patch.object(Path, 'read_text', return_value=settings_with_hooks):
         with patch.object(Path, 'is_file', return_value=True):
-            assert get_claude_hooks_present(Path("/fake/settings.json")) is True
+            assert get_claude_hooks_state(Path("/fake/settings.json")) == "present"
 
     # Case 2: hooks absent
     settings_without_hooks = '{"other": "value"}'
     with patch.object(Path, 'read_text', return_value=settings_without_hooks):
         with patch.object(Path, 'is_file', return_value=True):
-            assert get_claude_hooks_present(Path("/fake/settings.json")) is False
+            assert get_claude_hooks_state(Path("/fake/settings.json")) == "absent"
 
-    # Case 3: invalid JSON
+    # Case 3: invalid JSON — unreadable, never the same line as "absent"
     with patch.object(Path, 'read_text', return_value="invalid json"):
         with patch.object(Path, 'is_file', return_value=True):
-            assert get_claude_hooks_present(Path("/fake/settings.json")) is False
+            assert get_claude_hooks_state(Path("/fake/settings.json")) == "unreadable"
+
+    # Case 4: no file at all
+    with patch.object(Path, 'is_file', return_value=False):
+        assert get_claude_hooks_state(Path("/fake/settings.json")) == "absent"
 
 
 def test_get_project_local_skills(tmp_path):
@@ -212,9 +294,10 @@ def test_compute_risk_markers():
     trust = TrustSettings(
         hermes_trusted_paths=["/path1", "/path2"],
         hermes_trusted_count=2,
-        hermes_parse_error=False,
+        hermes_config_state="present",
         quarantine_count=0,
-        claude_hooks_present=True,
+        quarantine_state="present",
+        claude_hooks_state="present",
         project_local_skills=[],
     )
     tokens = TokenInfo(
@@ -222,12 +305,19 @@ def test_compute_risk_markers():
         gh_available=True,
         overbroad_scopes=[],
     )
-    risk_markers = compute_risk_markers(inventories, trust, tokens, claude_hooks_present=True)
+    risk_markers = compute_risk_markers(inventories, trust, tokens)
     assert risk_markers.skills_with_scripts == 3  # 2 + 1 + 0
     assert risk_markers.hooks_present is True
     assert risk_markers.trust_list_size == 2
     assert risk_markers.trusted_paths == ["/path1", "/path2"]
     assert risk_markers.overbroad_token_scopes == []
+    assert risk_markers.unreadable_legs == []
+
+    # an unreadable leg is surfaced, and hooks_present derives from the state
+    trust.claude_hooks_state = "unreadable"
+    risk_markers = compute_risk_markers(inventories, trust, tokens)
+    assert risk_markers.hooks_present is False
+    assert risk_markers.unreadable_legs == ["claude settings"]
 
 
 def test_determine_suggested_action_priority():
@@ -268,6 +358,11 @@ def test_determine_suggested_action_priority():
     action = determine_suggested_action(risk_markers, inventories)
     assert action == "no action needed this cycle"
 
+    # An unreadable leg refuses the clean verdict
+    risk_markers.unreadable_legs = ["claude settings", "hermes config"]
+    action = determine_suggested_action(risk_markers, inventories)
+    assert action == "resolve the not checked rows before trusting a clean scan"
+
 
 def test_build_scan_result():
     """Test building the full scan result."""
@@ -275,9 +370,10 @@ def test_build_scan_result():
     trust = TrustSettings(
         hermes_trusted_paths=["/trusted/path"],
         hermes_trusted_count=1,
-        hermes_parse_error=False,
+        hermes_config_state="present",
         quarantine_count=5,
-        claude_hooks_present=False,
+        quarantine_state="present",
+        claude_hooks_state="absent",
         project_local_skills=[("myproject", 1)],
     )
     tokens = TokenInfo(
@@ -285,7 +381,7 @@ def test_build_scan_result():
         gh_available=True,
         overbroad_scopes=[],
     )
-    result = build_scan_result(inventories, trust, tokens, claude_hooks_present=False, project_local_skills=[("myproject", 1)])
+    result = build_scan_result(inventories, trust, tokens)
     assert result.inventories.total_skills == 3  # 1 + 2
     assert result.inventories.total_scripts == 1  # from Codex
     assert result.trust.hermes_trusted_count == 1

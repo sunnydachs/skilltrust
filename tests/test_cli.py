@@ -9,7 +9,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from skilltrust.cli import format_human_output, main, detect_lang, localize_action
-from skilltrust.core import ScanResult, SkillInventory, TrustSettings, TokenInfo, RiskMarkers
+from skilltrust.core import (
+    ScanResult, SkillInventory, TrustSettings, TokenInfo, RiskMarkers,
+    build_scan_result, get_real_trust_settings,
+)
 
 
 def _inv(roots=None):
@@ -28,9 +31,10 @@ def _sample_result():
     trust = TrustSettings(
         hermes_trusted_paths=["/path/to/project1", "/path/to/project2"],
         hermes_trusted_count=2,
-        hermes_parse_error=False,
+        hermes_config_state="present",
         quarantine_count=3,
-        claude_hooks_present=True,
+        quarantine_state="present",
+        claude_hooks_state="present",
         project_local_skills=[("myproject", 1)],
     )
     tokens = TokenInfo(
@@ -96,7 +100,12 @@ def test_format_human_output_en():
 def test_format_human_output_defaults_ja():
     """Empty-state formatting, Japanese."""
     inventories = _inv({})
-    trust = TrustSettings([], 0, False, 0, False, [])
+    trust = TrustSettings(
+        hermes_trusted_paths=[], hermes_trusted_count=0,
+        hermes_config_state="absent", quarantine_count=0,
+        quarantine_state="absent", claude_hooks_state="absent",
+        project_local_skills=[],
+    )
     tokens = TokenInfo("unavailable", False, [])
     risk_markers = RiskMarkers(0, False, 0, [], [])
     result = ScanResult(
@@ -121,7 +130,12 @@ def test_format_human_output_defaults_ja():
 def test_format_human_output_defaults_en():
     """Empty-state formatting, English."""
     inventories = _inv({})
-    trust = TrustSettings([], 0, False, 0, False, [])
+    trust = TrustSettings(
+        hermes_trusted_paths=[], hermes_trusted_count=0,
+        hermes_config_state="absent", quarantine_count=0,
+        quarantine_state="absent", claude_hooks_state="absent",
+        project_local_skills=[],
+    )
     tokens = TokenInfo("unavailable", False, [])
     risk_markers = RiskMarkers(0, False, 0, [], [])
     result = ScanResult(
@@ -137,6 +151,105 @@ def test_format_human_output_defaults_en():
     assert "Trusted project dirs: 0 (none)" in output
     assert "Claude hooks: no" in output
     assert "→ no action needed this cycle" in output
+
+
+def test_format_human_output_unreadable_legs():
+    """An unreadable leg prints "not checked", never a clean negative."""
+    inventories = _inv({})
+    trust = TrustSettings(
+        hermes_trusted_paths=[], hermes_trusted_count=0,
+        hermes_config_state="unreadable", quarantine_count=0,
+        quarantine_state="unreadable", claude_hooks_state="unreadable",
+        project_local_skills=[],
+    )
+    tokens = TokenInfo("unavailable", False, [])
+    risk_markers = RiskMarkers(
+        0, False, 0, [], [],
+        unreadable_legs=["claude settings", "hermes config", "quarantine dir"],
+    )
+    result = ScanResult(
+        date="2026-10-09",
+        inventories=inventories,
+        trust=trust,
+        tokens=tokens,
+        risk_markers=risk_markers,
+        suggested_action="resolve the not checked rows before trusting a clean scan",
+    )
+    output = format_human_output(result, lang="en")
+    assert "Trusted project dirs: not checked (unreadable config.yaml)" in output
+    assert "Quarantined: not checked (unreadable quarantine dir)" in output
+    assert "Claude hooks: not checked (unreadable settings.json)" in output
+    assert "Trusted project dirs: 0 (none)" not in output
+    assert "  Claude hooks: no\n" not in output  # "no" ≠ prefix of "not checked"
+    assert "→ resolve the not checked rows before trusting a clean scan" in output
+
+    output_ja = format_human_output(result, lang="ja")
+    assert "Trust済みプロジェクト: 確認できず (config.yamlを読み取れず)" in output_ja
+    assert "隔離(quarantine): 確認できず (quarantineディレクトリを読み取れず)" in output_ja
+    assert "Claude hooks: 確認できず (settings.jsonを読み取れず)" in output_ja
+    assert "確認できず(not checked)の行を解決してからクリーン判定を信頼してください" in output_ja
+
+
+def test_real_wiring_hooks_display_matches_action(tmp_path, monkeypatch):
+    """End-to-end over the REAL trust wiring — no injected trust values.
+
+    Regression test for the 0.1.0 finding: the trust row printed a
+    hardcoded False while the action fired on the real value, so the
+    report said "Claude hooks: no" right above "review
+    ~/.claude/settings.json hooks".
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".hermes").mkdir()
+    # key's-own-indent spelling: valid YAML that 0.1.0 read as zero
+    (tmp_path / ".hermes" / "config.yaml").write_text(
+        "skills:\n  trusted_project_dirs:\n"
+        "  - /proj/one\n  - /proj/two\n  - /proj/three\n  - /proj/four\n")
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(
+        '{"hooks": {"PreToolUse": []}}')
+
+    inventories = _inv({})  # no skill roots in the fake HOME
+    trust, project_local = get_real_trust_settings()
+    tokens = TokenInfo("unavailable", False, [])
+    result = build_scan_result(inventories, trust, tokens)
+
+    assert result.trust.claude_hooks_state == "present"
+    assert result.risk_markers.hooks_present is True
+    assert result.suggested_action == "review ~/.claude/settings.json hooks"
+    output = format_human_output(result, lang="en")
+    assert "Claude hooks: yes" in output
+    assert "Trusted project dirs: 4 (/proj/one, /proj/two, /proj/three, /proj/four)" in output
+    # the display and the action must never contradict again
+    assert "Claude hooks: no" not in output
+
+
+def test_main_json_refuses_clean_when_unreadable(capsys):
+    """--json: the clean action is refused while a leg is unreadable."""
+    with patch("skilltrust.cli.get_real_skill_inventory") as mock_skills, \
+         patch("skilltrust.cli.get_real_trust_settings") as mock_trust, \
+         patch("skilltrust.cli.get_real_token_info") as mock_tokens:
+
+        mock_skills.return_value = _inv({})
+        mock_trust.return_value = (
+            TrustSettings(
+                hermes_trusted_paths=[], hermes_trusted_count=0,
+                hermes_config_state="absent", quarantine_count=0,
+                quarantine_state="absent", claude_hooks_state="unreadable",
+                project_local_skills=[],
+            ),
+            [],
+        )
+        mock_tokens.return_value = TokenInfo("unavailable", False, [])
+
+        with patch("sys.argv", ["skilltrust", "scan", "--json"]):
+            main()
+
+        data = json.loads(capsys.readouterr().out)
+    assert data["trust"]["claude_hooks_state"] == "unreadable"
+    assert data["trust"]["claude_hooks_present"] is False
+    assert data["risk_markers"]["unreadable_legs"] == ["claude settings"]
+    assert data["suggested_action"] == \
+        "resolve the not checked rows before trusting a clean scan"
 
 
 def test_detect_lang():
@@ -163,6 +276,8 @@ def test_localize_action():
     assert localize_action("confirm provenance of the 3 script-bundled skills", "ja") \
         == "スクリプト同梱3件のスキルの由来を確認"
     assert localize_action("no action needed this cycle", "en") == "no action needed this cycle"
+    assert localize_action("resolve the not checked rows before trusting a clean scan", "ja") \
+        == "確認できず(not checked)の行を解決してからクリーン判定を信頼してください"
     assert localize_action("some future action", "ja") == "some future action"
 
 
@@ -174,12 +289,15 @@ def test_main_json_output(capsys):
 
         mock_skills.return_value = _inv({"Claude Code": (1, 0), "Codex": (2, 0)})
         mock_trust.return_value = (
-            TrustSettings([], 0, False, 0, False, []),
-            False,
+            TrustSettings(
+                hermes_trusted_paths=[], hermes_trusted_count=0,
+                hermes_config_state="present", quarantine_count=0,
+                quarantine_state="present", claude_hooks_state="absent",
+                project_local_skills=[],
+            ),
             [],
         )
         mock_tokens.return_value = TokenInfo("unavailable", False, [])
-
         with patch("sys.argv", ["skilltrust", "scan", "--json"]):
             main()
 
@@ -190,6 +308,8 @@ def test_main_json_output(capsys):
         assert data["inventories"]["total_skills"] == 3
         assert data["trust"]["hermes_trusted_count"] == 0
         assert data["trust"]["quarantine_count"] == 0
+        assert data["trust"]["hermes_config_state"] == "present"
+        assert data["trust"]["claude_hooks_state"] == "absent"
         assert data["tokens"]["gh_available"] is False
         assert data["tokens"]["scopes"] == "unavailable"
         assert data["suggested_action"] == "no action needed this cycle"
@@ -204,7 +324,15 @@ def test_main_output_to_file_ja(tmp_path):
          patch("skilltrust.cli.get_real_token_info") as mock_tokens:
 
         mock_skills.return_value = _inv({})
-        mock_trust.return_value = (TrustSettings([], 0, False, 0, False, []), False, [])
+        mock_trust.return_value = (
+            TrustSettings(
+                hermes_trusted_paths=[], hermes_trusted_count=0,
+                hermes_config_state="present", quarantine_count=0,
+                quarantine_state="present", claude_hooks_state="absent",
+                project_local_skills=[],
+            ),
+            [],
+        )
         mock_tokens.return_value = TokenInfo("unavailable", False, [])
 
         with patch("sys.argv",

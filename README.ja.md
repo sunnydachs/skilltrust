@@ -75,9 +75,9 @@ skilltrust scan --output FILE      # レポートをファイルに書き出す(
 | スキル在庫 | `~/.claude/skills`、`~/.codex/skills`、`~/.openclaw/skills`、`~/.cursor/skills`、`~/.opencode/skills`、`~/.agents/skills`、`~/.hermes/skills` | 有名エージェントの個人ルート。ないルートは省略、symlinkルートは実パスで重複排除、Hermesのカテゴリ階層対応 |
 | スクリプト同梱 | スキルdir配下の`*.py/sh/js/ts` | `__pycache__`は除外 |
 | プロジェクトローカル | `~/projects/*/.hermes/skills`、`~/projects/*/.agents/skills` | trust済みrepoでのみロードされる。件数とプロジェクト名 |
-| Hermes trustリスト | `~/.hermes/config.yaml` → `skills.trusted_project_dirs` | 最小限のstdlib yamlサブセットパーサ。パース失敗は報告され、クラッシュしない |
+| Hermes trustリスト | `~/.hermes/config.yaml` → `skills.trusted_project_dirs` | 最小限のstdlib yamlサブセットパーサ。block・key同インデント・flowの3綴りすべてを読む。読めなかった項目は「確認できず(not checked)」と表示され、クリーンな否定として印刷されない |
 | 隔離 | `~/.hermes/skills/.hub/quarantine/` | hubスキャナがブロックしたスキル |
-| Claude Code hooks | `~/.claude/settings.json` → `hooks` | hooksはセッション開始時にコードを実行する |
+| Claude Code hooks | `~/.claude/settings.json` → `hooks` | hooksはセッション開始時にコードを実行する。読み取れないファイルは「確認できず」と表示され、クリーン判定は拒否される |
 | GitHubトークン | `gh auth status` | `workflow`と`delete_repo`を理由付きで指摘 |
 
 ## 限界
