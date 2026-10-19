@@ -64,7 +64,7 @@ skilltrust scan --json             # 機械可読。実行間のdiff用
 skilltrust scan --output FILE      # レポートをファイルに書き出す(月次diff運用)
 ```
 
-人間向けレポートはロケール(`LC_ALL` / `LC_MESSAGES` / `LANG`)に従い、未設定なら英語です。`--lang` で上書きできます。`--json` は意図的に言語非依存 — `suggested_action` は常に正規の英語文字列なので、どこで実行しても月次diffが安定します。
+人間向けレポートはロケール(`LC_ALL` / `LC_MESSAGES` / `LANG`)に従い、未設定なら英語です。`--lang` で上書きできます。`--json` は意図的に言語非依存 — `suggested_action` は常に正規の英語文字列なので、どこで実行しても月次diffが安定します。読めなかった項目はJSONでは `null` になります — diffが「確認済みの否定」と読み間違えうるゼロや `false` は決して出さず、tri-stateは `*_state` フィールドと `risk_markers.unreadable_legs` が運びます。
 
 月1回実行して`--json`の出力を保存し、diffしてください。「先月から何が変わったか」— 増えたスキル、新しくスクリプト同梱になったスキル、trustリストの増減 — が定期の保険です。主たる契機はカレンダーではなくイベント駆動: 信頼面が変わりうる操作の直後に `skilltrust scan` を打ってください — スキルのインストール/更新(`hermes skills install`、マーケットプレイス経由、`~/.claude/skills`への手動配置)、新スキルを持ち込みうるtrust済みrepoでの `git pull`、トークンの再発行。スキャンは1秒未満・モデル呼び出しゼロなので後回しにする理由がありません。月次diffは、打ち忘れたイベントを拾うためだけに存在します。指摘があってもexit codeは0です。exit 1は環境破壊(HOME未設定など)のみです。
 

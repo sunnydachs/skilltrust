@@ -224,7 +224,8 @@ def test_real_wiring_hooks_display_matches_action(tmp_path, monkeypatch):
 
 
 def test_main_json_refuses_clean_when_unreadable(capsys):
-    """--json: the clean action is refused while a leg is unreadable."""
+    """--json: the clean action is refused while a leg is unreadable, and
+    the legacy booleans read null (unknown), never false (= absent)."""
     with patch("skilltrust.cli.get_real_skill_inventory") as mock_skills, \
          patch("skilltrust.cli.get_real_trust_settings") as mock_trust, \
          patch("skilltrust.cli.get_real_token_info") as mock_tokens:
@@ -246,10 +247,51 @@ def test_main_json_refuses_clean_when_unreadable(capsys):
 
         data = json.loads(capsys.readouterr().out)
     assert data["trust"]["claude_hooks_state"] == "unreadable"
-    assert data["trust"]["claude_hooks_present"] is False
+    # null = unknown, false = checked-and-absent: a boolean-only consumer
+    # must not be able to read unreadable as absent
+    assert data["trust"]["claude_hooks_present"] is None
+    assert data["risk_markers"]["hooks_present"] is None
     assert data["risk_markers"]["unreadable_legs"] == ["claude settings"]
     assert data["suggested_action"] == \
         "resolve the not checked rows before trusting a clean scan"
+
+
+def test_main_json_nulls_every_meaningless_field_on_unreadable(capsys):
+    """Horizontal sweep: EVERY field that means nothing on an unreadable
+    leg is null — the two booleans, the counts, and the path lists — so no
+    zero-value can be read as a clean negative."""
+    with patch("skilltrust.cli.get_real_skill_inventory") as mock_skills, \
+         patch("skilltrust.cli.get_real_trust_settings") as mock_trust, \
+         patch("skilltrust.cli.get_real_token_info") as mock_tokens:
+
+        mock_skills.return_value = _inv({})
+        mock_trust.return_value = (
+            TrustSettings(
+                hermes_trusted_paths=[], hermes_trusted_count=0,
+                hermes_config_state="unreadable", quarantine_count=0,
+                quarantine_state="unreadable", claude_hooks_state="unreadable",
+                project_local_skills=[],
+            ),
+            [],
+        )
+        mock_tokens.return_value = TokenInfo("unavailable", False, [])
+
+        with patch("sys.argv", ["skilltrust", "scan", "--json"]):
+            main()
+
+        data = json.loads(capsys.readouterr().out)
+    t = data["trust"]
+    assert t["hermes_trusted_paths"] is None
+    assert t["hermes_trusted_count"] is None
+    assert t["quarantine_count"] is None
+    assert t["claude_hooks_present"] is None
+    rm = data["risk_markers"]
+    assert rm["hooks_present"] is None
+    assert rm["trust_list_size"] is None
+    assert rm["trusted_paths"] is None
+    # the states and the unreadable list carry the truth
+    assert t["hermes_config_state"] == "unreadable"
+    assert rm["unreadable_legs"] == ["claude settings", "hermes config", "quarantine dir"]
 
 
 def test_detect_lang():
@@ -310,6 +352,7 @@ def test_main_json_output(capsys):
         assert data["trust"]["quarantine_count"] == 0
         assert data["trust"]["hermes_config_state"] == "present"
         assert data["trust"]["claude_hooks_state"] == "absent"
+        assert data["trust"]["claude_hooks_present"] is False  # absent is false, not null
         assert data["tokens"]["gh_available"] is False
         assert data["tokens"]["scopes"] == "unavailable"
         assert data["suggested_action"] == "no action needed this cycle"

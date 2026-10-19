@@ -120,6 +120,18 @@ def _overbroad_item(scope: str, lang: str) -> str:
     return scope
 
 
+def _or_null(value, state):
+    """Horizontal tri-state rule for the JSON surface.
+
+    A field that means nothing on an unreadable leg is null — never a
+    zero/false value a consumer could read as a clean negative. The
+    boolean-only reader inherits the old conflation otherwise (found in
+    review: claude_hooks_present read false on an unreadable leg, same
+    output as absent).
+    """
+    return None if state == "unreadable" else value
+
+
 def format_human_output(result, lang: str = "en") -> str:
     """Format the scan result as human-readable text in the given language.
 
@@ -254,14 +266,14 @@ def main() -> int:
                     "project_local_names": result.inventories.project_local_names,
                 },
                 "trust": {
-                    "hermes_trusted_paths": result.trust.hermes_trusted_paths,
-                    "hermes_trusted_count": result.trust.hermes_trusted_count,
+                    "hermes_trusted_paths": _or_null(result.trust.hermes_trusted_paths, result.trust.hermes_config_state),
+                    "hermes_trusted_count": _or_null(result.trust.hermes_trusted_count, result.trust.hermes_config_state),
                     "hermes_config_state": result.trust.hermes_config_state,
                     "hermes_parse_error": result.trust.hermes_config_state == "unreadable",
-                    "quarantine_count": result.trust.quarantine_count,
+                    "quarantine_count": _or_null(result.trust.quarantine_count, result.trust.quarantine_state),
                     "quarantine_state": result.trust.quarantine_state,
                     "claude_hooks_state": result.trust.claude_hooks_state,
-                    "claude_hooks_present": result.trust.claude_hooks_state == "present",
+                    "claude_hooks_present": _or_null(result.trust.claude_hooks_state == "present", result.trust.claude_hooks_state),
                     "project_local_skills": result.trust.project_local_skills,
                 },
                 "tokens": {
@@ -271,9 +283,9 @@ def main() -> int:
                 },
                 "risk_markers": {
                     "skills_with_scripts": result.risk_markers.skills_with_scripts,
-                    "hooks_present": result.risk_markers.hooks_present,
-                    "trust_list_size": result.risk_markers.trust_list_size,
-                    "trusted_paths": result.risk_markers.trusted_paths,
+                    "hooks_present": _or_null(result.risk_markers.hooks_present, result.trust.claude_hooks_state),
+                    "trust_list_size": _or_null(result.risk_markers.trust_list_size, result.trust.hermes_config_state),
+                    "trusted_paths": _or_null(result.risk_markers.trusted_paths, result.trust.hermes_config_state),
                     "overbroad_token_scopes": result.risk_markers.overbroad_token_scopes,
                     "unreadable_legs": result.risk_markers.unreadable_legs,
                 },
